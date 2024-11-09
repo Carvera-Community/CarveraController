@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "carveracontroller-community"
+name = "carvera-controller-community"
 description = "Controller for the Carvera CNC"
 version = "0.0.0" # version is managed in git
 license = "GPL-2.0"
@@ -18,12 +18,13 @@ pyinstaller = "^6.11.0"
 pyinstaller-versionfile = "^2.1.1"
 appimage-builder = "^1.1.0"
 setuptools-scm = "^8.1.0"
+ruamel-yaml = "^0.18.6"
 
+
+[tool.poetry-dynamic-versioning]
+enable = true
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
-
-[tool.poetry.scripts]
-build = "scripts.build:main"
+requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]
+build-backend = "poetry_dynamic_versioning.backend"
 
 [tool.setuptools_scm]

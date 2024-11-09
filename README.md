@@ -2,7 +2,44 @@
 
 Community developed version of the Makera Carvera Controller software.
 
-## Development Build Environment Setup
+## Supported OS
+
+The Controller software works on the following systems:
+
+- Windows
+- MacOS using Intel CPUs running Ventura (13) or above
+- MacOS using Apple Silicon CPUs running Sonoma (14) or above
+- Linux using x64 CPU running a Linux distribution with Glibc 2.31 or above (eg. Ubuntu 20.04 or higher)
+- Linux using ARM64 CPUs (eg RasPi 3 or above) running a distribution Glibc 2.36 or above (eg. Raspios Bookworm or higher) 
+
+
+## Installation
+
+See the assets section of [latest release](https://github.com/carvera-community/carvera_controller/releases/latest) for installation packages for your system.
+
+- carveracontroller-community-\<version\>-windows-x64.exe - Standalone Windows binary, without a installer
+- carveracontroller-community-\<version\>-Intel.dmg - MacOS with Intel CPU
+- carveracontroller-community-\<version\>-AppleSilicon.dmg - MacOS with Apple CPU (M1 etc)
+- carveracontroller-community-\<version\>-x86_64.appimage - Linux AppImage for x64 systems
+- carveracontroller-community-\<version\>-aarch64.appimage - Linux AppImage for ARM64 systems
+
+
+## Alternative Installation: Python Package 
+
+It's best to use a one of pre-built packages as they they have frozen versions of tested dependenies, however if you prefer the software can be installed as a Python package. This might allow you to use a unsupported platform (eg raspi 1) provided that the dependencies can be met.
+
+``` bash
+pip install carvera-controller-community
+```
+
+Once installed it can be run via the module
+
+``` bash
+python3 -m carveracontroller
+```
+
+
+## Development Environment Setup
 
 To contribute to this project or set up a local development environment, follow these steps to install dependencies and prepare your environment.
 
@@ -10,7 +47,8 @@ To contribute to this project or set up a local development environment, follow 
 
 - Ensure you have [Python](https://www.python.org/downloads/) installed on your system (preferably version 3.8 or later).
 - [Poetry](https://python-poetry.org/) is required for dependency management. Poetry simplifies packaging and simplifies the management of Python dependencies.
-- [Squashfs-tools](https://github.com/plougher/squashfs-tools) is required if building Linux AppImages. On Debian based systems it's provided by the package `squashfs-tools`
+- One of the python dependencies [QuickLZ](https://pypi.org/project/pyquicklz/) will be compiled by Poetry when installed. Ensure that you have a compiler that Poetry/Pip can use and the Pythong headers. On a debian based Linux system this can be accomplished with `sudo apt-get install python3-dev build essential`. On Windows installation of (just) the Visual C++ 14.x compiler is required, this can be accomplished with [MSBuild tools package](https://wiki.python.org/moin/WindowsCompilers#Microsoft_Visual_C.2B-.2B-_14.2_standalone:_Build_Tools_for_Visual_Studio_2019_.28x86.2C_x64.2C_ARM.2C_ARM64.29). 
+- [Squashfs-tools](https://github.com/plougher/squashfs-tools) is required if building Linux AppImages. On Debian based systems it's provided by the package `squashfs-tools`. This is only required if packaging for linux.
 
 ### Installing Poetry
 
@@ -55,10 +93,10 @@ Once you have Poetry installed, setting up the development environment is straig
 
 ### Running the Project
 
-You can run your project or specific scripts using Poetry's run command. For example:
+You can run the Controller software using Poetry's run command without installation. This is handy for iterative development. 
 
 ```bash
-poetry run python carveracontroller/main.py
+poetry run python -m carveracontroller
 ```
 
 ### Local Packaging
@@ -66,5 +104,7 @@ poetry run python carveracontroller/main.py
 The application is packaged using PyInstaller. This tool converts Python applications into a standalone executable, so it can be run on systems without requiring management of a installed Python interpreter or dependent libraries. An build helper script is configured with Poetry and can be run with:
 
 ```bash
-poetry run build --os ["windows", "linux", "macos"]
+poetry run python scripts/build.py --os os [--no-appimage]
 ```
+
+The options for `os` are windows, macos, or linux. If selecting `linux`, an appimage is built by default unless --no-appimage is specified.

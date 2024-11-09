@@ -2,28 +2,7 @@ import os
 import quicklz
 import struct
 
-def is_android():
-    return 'ANDROID_ARGUMENT' in os.environ or 'ANDROID_PRIVATE' in os.environ or 'ANDROID_APP_PATH' in os.environ
 
-if is_android():
-    try:
-        from jnius import autoclass
-
-        DisplayMetrics = autoclass('android.util.DisplayMetrics')
-        WindowManager = autoclass('android.view.WindowManager')
-        PythonActivity = autoclass('org.kivy.android.PythonActivity')
-
-        activity = PythonActivity.mActivity
-        metrics = DisplayMetrics()
-        activity.getWindowManager().getDefaultDisplay().getMetrics(metrics)
-
-        screen_width_density  = int(metrics.widthPixels  * 10 / 960) / 10
-        screen_height_density = int(metrics.heightPixels * 10 / 550) / 10
-
-        os.environ["KIVY_METRICS_DENSITY"] = str(min(screen_width_density, screen_height_density))
-
-    except ImportError:
-        print("Pyjnius Import Fail.")
 
 # import os
 # os.environ["KIVY_METRICS_DENSITY"] = '1'
@@ -41,16 +20,6 @@ import time
 import datetime
 import threading
 import logging
-
-VERSION = '0.9.8'
-FW_UPD_ADDRESS = 'https://raw.githubusercontent.com/MakeraInc/CarveraFirmware/main/version.txt'
-CTL_UPD_ADDRESS = 'https://raw.githubusercontent.com/MakeraInc/CarveraController/main/version.txt'
-DOWNLOAD_ADDRESS = 'https://www.makera.com/pages/software'
-
-LANGS = {
-    'en':  'English',
-    'zh-CN': '中文简体(Simplified Chinese)',
-}
 
 class Lang(Observable):
     observers = []
@@ -96,52 +65,6 @@ class Lang(Observable):
         for func, largs, kwargs in self.observers:
             func(largs, None, None)
 
-from kivy.config import Config
-
-# init language
-default_lang = 'en'
-if Config.has_option('carvera', 'language'):
-    default_lang = Config.get('carvera', 'language')
-else:
-    try:
-        default_locale = locale.getdefaultlocale()
-        if default_locale != None:
-            for lang_key in LANGS.keys():
-                if default_locale[0][0:2] in lang_key:
-                    default_lang = lang_key
-                    break
-    except:
-        pass
-
-tr = Lang(default_lang)
-
-if not Config.has_section('carvera') or not Config.has_option('carvera', 'version') or Config.get('carvera', 'version') != VERSION:
-    if not Config.has_section('carvera'):
-        Config.add_section('carvera')
-    Config.set('carvera', 'version', VERSION)
-    if not Config.has_option('carvera', 'show_update'): Config.set('carvera', 'show_update', '1')
-    if not Config.has_option('carvera', 'language'): Config.set('carvera', 'language', default_lang)
-    if not Config.has_option('carvera', 'local_folder_1'): Config.set('carvera', 'local_folder_1', '')
-    if not Config.has_option('carvera', 'local_folder_2'): Config.set('carvera', 'local_folder_2', '')
-    if not Config.has_option('carvera', 'local_folder_3'): Config.set('carvera', 'local_folder_3', '')
-    if not Config.has_option('carvera', 'local_folder_4'): Config.set('carvera', 'local_folder_4', '')
-    if not Config.has_option('carvera', 'local_folder_5'): Config.set('carvera', 'local_folder_5', '')
-    if not Config.has_option('carvera', 'remote_folder_1'): Config.set('carvera', 'remote_folder_1', '')
-    if not Config.has_option('carvera', 'remote_folder_2'): Config.set('carvera', 'remote_folder_2', '')
-    if not Config.has_option('carvera', 'remote_folder_3'): Config.set('carvera', 'remote_folder_3', '')
-    if not Config.has_option('carvera', 'remote_folder_4'): Config.set('carvera', 'remote_folder_4', '')
-    if not Config.has_option('carvera', 'remote_folder_5'): Config.set('carvera', 'remote_folder_5', '')
-    # Default params, set only once
-    Config.set('kivy', 'window_icon', 'data/icon.png')
-    Config.set('kivy', 'exit_on_escape', '0')
-    Config.set('kivy', 'pause_on_minimize', '0')
-    Config.set('graphics', 'width', '960')
-    Config.set('graphics', 'height', '600')
-    Config.set('graphics', 'allow_screensaver', '0')
-    #Config.set('input', 'mouse', 'mouse, multitouch_on_demand')
-    Config.write()
-
-Config.set('kivy', 'exit_on_escape', '0')
 import json
 import re
 import tempfile
@@ -169,10 +92,11 @@ from kivy.properties import BooleanProperty
 from kivy.graphics import Color, Rectangle, Ellipse, Line
 from kivy.properties import ObjectProperty, NumericProperty, ListProperty
 from kivy.metrics import dp
+from kivy.config import Config
 
 from serial.tools.list_ports import comports
 from functools import partial
-from WIFIStream import MachineDetector
+from .WIFIStream import MachineDetector
 from kivy.core.window import Window
 from kivy.core.text import LabelBase
 from kivy.resources import resource_add_path
@@ -184,64 +108,64 @@ from pathlib import Path
 import shutil
 import string
 
-import Utils
+from . import Utils
 from kivy.config import ConfigParser
-from CNC import CNC
-from GcodeViewer import GCodeViewer
-from Controller import Controller, NOT_CONNECTED, STATECOLOR, STATECOLORDEF,\
+from .CNC import CNC
+from .GcodeViewer import GCodeViewer
+from .Controller import Controller, NOT_CONNECTED, STATECOLOR, STATECOLORDEF,\
     LOAD_DIR, LOAD_MV, LOAD_RM, LOAD_MKDIR, LOAD_WIFI, LOAD_CONN_WIFI, CONN_USB, CONN_WIFI, SEND_FILE
 
-#Config.set('graphics', 'width', '960')
-#Config.set('graphics', 'height', '432')
 
 
-# Config.write()
+def load_halt_translations(tr: Lang):
+    """Loads the appropriate language translation"""
+    HALT_REASON = {
+        # Just need to unlock the mahchine
+        1:  tr._("Halt Manually"),
+        2:  tr._("Home Fail"),
+        3:  tr._("Probe Fail"),
+        4:  tr._("Calibrate Fail"),
+        5:  tr._("ATC Home Fail"),
+        6:  tr._("ATC Invalid Tool Number"),
+        7:  tr._("ATC Drop Tool Fail"),
+        8:  tr._("ATC Position Occupied"),
+        9:  tr._("Spindle Overheated"),
+        10: tr._("Soft Limit Triggered"),
+        11: tr._("Cover opened when playing"),
+        12: tr._("Wireless probe dead or not set"),
+        13: tr._("Emergency stop button pressed"),
+        # Need to reset the machine
+        21: tr._("Hard Limit Triggered, reset needed"),
+        22: tr._("X Axis Motor Error, reset needed"),
+        23: tr._("Y Axis Motor Error, reset needed"),
+        24: tr._("Z Axis Motor Error, reset needed"),
+        25: tr._("Spindle Stall, reset needed"),
+        26: tr._("SD card read fail, reset needed"),
+        # Need to power off/on the machine
+        41: tr._("Spindle Alarm, power off/on needed"),
+    }
+    return HALT_REASON
 
-Window.softinput_mode = "below_target"
-# print('windowsize: {}'.format(Window.size))
+def init_lang():
+    # init language
+    default_lang = 'en'
+    if Config.has_option('carvera', 'language'):
+        default_lang = Config.get('carvera', 'language')
+    else:
+        try:
+            default_locale = locale.getdefaultlocale()
+            if default_locale != None:
+                for lang_key in LANGS.keys():
+                    if default_locale[0][0:2] in lang_key:
+                        default_lang = lang_key
+                        break
+        except:
+            pass
 
-_device     = None
-_baud       = None
+    return default_lang
 
-SHORT_LOAD_TIMEOUT = 3  # s
-WIFI_LOAD_TIMEOUT = 30 # s
-HEARTBEAT_TIMEOUT = 10
-
-MAX_TOUCH_INTERVAL = 0.15
-GCODE_VIEW_SPEED = 1
-
-LOAD_INTERVAL = 10000 # must be divisible by MAX_LOAD_LINES
-MAX_LOAD_LINES = 10000
-
-1# 定义块大小
-BLOCK_SIZE = 4096
-BLOCK_HEADER_SIZE = 4
-
-HALT_REASON = {
-    # Just need to unlock the mahchine
-    1:  tr._("Halt Manually"),
-    2:  tr._("Home Fail"),
-    3:  tr._("Probe Fail"),
-    4:  tr._("Calibrate Fail"),
-    5:  tr._("ATC Home Fail"),
-    6:  tr._("ATC Invalid Tool Number"),
-    7:  tr._("ATC Drop Tool Fail"),
-    8:  tr._("ATC Position Occupied"),
-    9:  tr._("Spindle Overheated"),
-    10: tr._("Soft Limit Triggered"),
-    11: tr._("Cover opened when playing"),
-    12: tr._("Wireless probe dead or not set"),
-    13: tr._("Emergency stop button pressed"),
-    # Need to reset the machine
-    21: tr._("Hard Limit Triggered, reset needed"),
-    22: tr._("X Axis Motor Error, reset needed"),
-    23: tr._("Y Axis Motor Error, reset needed"),
-    24: tr._("Z Axis Motor Error, reset needed"),
-    25: tr._("Spindle Stall, reset needed"),
-    26: tr._("SD card read fail, reset needed"),
-    # Need to power off/on the machine
-    41: tr._("Spindle Alarm, power off/on needed"),
-}
+def is_android():
+    return 'ANDROID_ARGUMENT' in os.environ or 'ANDROID_PRIVATE' in os.environ or 'ANDROID_APP_PATH' in os.environ
 
 def app_base_path():
     """
@@ -1311,7 +1235,7 @@ class Makera(RelativeLayout):
 
     ctl_upd_text = ''
     ctl_version_new = ''
-    ctl_version_old = VERSION
+    ctl_version_old = ''
 
     common_local_dir_list = []
     recent_local_dir_list = []
@@ -1345,11 +1269,11 @@ class Makera(RelativeLayout):
 
     status_index = 0
 
-    def __init__(self):
+    def __init__(self, ctl_version):
         super(Makera, self).__init__()
 
         self.temp_dir = tempfile.mkdtemp()
-
+        self.ctl_version_old = ctl_version
         self.file_popup = FilePopup()
 
         self.cnc = CNC()
@@ -3665,9 +3589,121 @@ class MakeraApp(App):
         self.use_kivy_settings = True
         self.title = tr._('Carvera Controller')
 
-        return Makera()
+        return Makera(ctl_version=VERSION)
+
+def android_tweaks():
+    """Android specific app changes"""
+    try:
+        from jnius import autoclass
+
+        DisplayMetrics = autoclass('android.util.DisplayMetrics')
+        WindowManager = autoclass('android.view.WindowManager')
+        PythonActivity = autoclass('org.kivy.android.PythonActivity')
+
+        activity = PythonActivity.mActivity
+        metrics = DisplayMetrics()
+        activity.getWindowManager().getDefaultDisplay().getMetrics(metrics)
+
+        screen_width_density  = int(metrics.widthPixels  * 10 / 960) / 10
+        screen_height_density = int(metrics.heightPixels * 10 / 550) / 10
+
+        os.environ["KIVY_METRICS_DENSITY"] = str(min(screen_width_density, screen_height_density))
+
+    except ImportError:
+        print("Pyjnius Import Fail.")
+
+def set_config_defaults(default_lang):
+    Config.set('kivy', 'exit_on_escape', '0')
+    if not Config.has_section('carvera') or not Config.has_option('carvera', 'version') or Config.get('carvera', 'version') != VERSION:
+        if not Config.has_section('carvera'):
+            Config.add_section('carvera')
+        Config.set('carvera', 'version', VERSION)
+        if not Config.has_option('carvera', 'show_update'): Config.set('carvera', 'show_update', '1')
+        if not Config.has_option('carvera', 'language'): Config.set('carvera', 'language', default_lang)
+        if not Config.has_option('carvera', 'local_folder_1'): Config.set('carvera', 'local_folder_1', '')
+        if not Config.has_option('carvera', 'local_folder_2'): Config.set('carvera', 'local_folder_2', '')
+        if not Config.has_option('carvera', 'local_folder_3'): Config.set('carvera', 'local_folder_3', '')
+        if not Config.has_option('carvera', 'local_folder_4'): Config.set('carvera', 'local_folder_4', '')
+        if not Config.has_option('carvera', 'local_folder_5'): Config.set('carvera', 'local_folder_5', '')
+        if not Config.has_option('carvera', 'remote_folder_1'): Config.set('carvera', 'remote_folder_1', '')
+        if not Config.has_option('carvera', 'remote_folder_2'): Config.set('carvera', 'remote_folder_2', '')
+        if not Config.has_option('carvera', 'remote_folder_3'): Config.set('carvera', 'remote_folder_3', '')
+        if not Config.has_option('carvera', 'remote_folder_4'): Config.set('carvera', 'remote_folder_4', '')
+        if not Config.has_option('carvera', 'remote_folder_5'): Config.set('carvera', 'remote_folder_5', '')
+        # Default params, set only once
+        Config.set('kivy', 'window_icon', 'data/icon.png')
+        Config.set('kivy', 'exit_on_escape', '0')
+        Config.set('kivy', 'pause_on_minimize', '0')
+        Config.set('graphics', 'width', '960')
+        Config.set('graphics', 'height', '600')
+        Config.set('graphics', 'allow_screensaver', '0')
+        #Config.set('input', 'mouse', 'mouse, multitouch_on_demand')
+        Config.write()
+
+def load_constants():
+    Window.softinput_mode = "below_target"
+
+    _device     = None
+    _baud       = None
+
+    global SHORT_LOAD_TIMEOUT
+    global WIFI_LOAD_TIMEOUT
+    global HEARTBEAT_TIMEOUT
+    global MAX_TOUCH_INTERVAL
+    global GCODE_VIEW_SPEED
+    global LOAD_INTERVAL
+    global MAX_LOAD_LINES
+    global BLOCK_SIZE
+    global BLOCK_HEADER_SIZE
+
+    global VERSION
+    global FW_UPD_ADDRESS
+    global CTL_UPD_ADDRESS
+    global DOWNLOAD_ADDRESS
+
+    global LANGS
+
+    VERSION = '0.9.8'
+    FW_UPD_ADDRESS = 'https://raw.githubusercontent.com/MakeraInc/CarveraFirmware/main/version.txt'
+    CTL_UPD_ADDRESS = 'https://raw.githubusercontent.com/MakeraInc/CarveraController/main/version.txt'
+    DOWNLOAD_ADDRESS = 'https://www.makera.com/pages/software'
+
+    LANGS = {
+        'en':  'English',
+        'zh-CN': '中文简体(Simplified Chinese)',
+    }
+
+    SHORT_LOAD_TIMEOUT = 3  # s
+    WIFI_LOAD_TIMEOUT = 30 # s
+    HEARTBEAT_TIMEOUT = 10
+
+    MAX_TOUCH_INTERVAL = 0.15
+    GCODE_VIEW_SPEED = 1
+
+    LOAD_INTERVAL = 10000 # must be divisible by MAX_LOAD_LINES
+    MAX_LOAD_LINES = 10000
+
+    1# 定义块大小
+    BLOCK_SIZE = 4096
+    BLOCK_HEADER_SIZE = 4
+
 
 def main():
+    if is_android():
+        android_tweaks()
+
+    # load the global constants
+    load_constants()
+
+    # Language translation needs to be globally accessiable
+    global default_lang
+    global tr
+    global HALT_REASON
+    default_lang = init_lang()
+    tr = Lang(default_lang)
+    set_config_defaults(default_lang)
+    HALT_REASON = load_halt_translations(tr)
+
     base_path = app_base_path()
     register_fonts(base_path)
     register_images(base_path)

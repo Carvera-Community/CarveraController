@@ -3,10 +3,8 @@ import sys
 import time
 import socket
 import select
-import os
-import Utils
 
-from XMODEM import XMODEM
+from .XMODEM import XMODEM
 import logging
 
 

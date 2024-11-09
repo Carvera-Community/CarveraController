@@ -38,7 +38,7 @@ jobs:
         powershell.exe mesa\\systemwidedeploy.cmd 1
 
     - name: Build release
-      run: poetry run build --os windows
+      run: poetry run python scripts/build.py --os windows
 
     - name: Rename artifact
       run: poetry run bash ./scripts/rename-release-file.sh windows
@@ -79,7 +79,7 @@ jobs:
         os: macos
 
     - name: Build release
-      run: poetry run build --os macos
+      run: poetry run python scripts/build.py --os macos
     
     - name: Debug
       run: ls ./dist
@@ -101,8 +101,17 @@ jobs:
         retention-days: 2
 
   build-linux-artifacts:
-    name: build-linux-generic
-    runs-on: ubuntu-20.04
+    name: build-linux-${{ matrix.platform }}
+    runs-on: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ x64 ]  # github hosted arm runners not standard yet
+        include:
+          - platform: x64
+            image: ubuntu-20.04
+          # - platform: aarch64
+          #   image: ubuntu-20.04
     defaults:
       run:
         shell: bash
@@ -123,7 +132,7 @@ jobs:
       run: sudo apt-get install -y mtdev-tools
 
     - name: Build release
-      run: xvfb-run poetry run build --os linux
+      run: xvfb-run poetry run python scripts/build.py --os linux
 
     - name: Rename artifact
       run: poetry run bash ./scripts/rename-release-file.sh linux
@@ -132,6 +141,39 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: linux-assets
+        path: ${{ github.workspace }}/dist/carveracontroller-community-*.appimage
+        retention-days: 2
+
+  build-linux-artifacts-arm:
+    name: build-linux-arm
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: make dist folder
+      run: mkdir -p ${{ github.workspace }}/dist/
+
+    - uses: pguyot/arm-runner-action@v2
+      id: build_image
+      with:
+        base_image: raspios_lite_arm64:latest
+        image_additional_mb: 10240
+        copy_artifact_path: dist/carveracontroller-community-*.appimage
+        copy_artifact_dest: ${{ github.workspace }}/dist/
+        commands: |
+          sudo apt-get install -y git python3-dev build-essential xvfb squashfs-tools
+          curl -sSL https://install.python-poetry.org | python3 - -y
+          export PATH="/home/runner/.local/bin:$PATH"
+          poetry config virtualenvs.in-project true
+          poetry install
+          xvfb-run poetry run python scripts/build.py --os linux
+          poetry run bash ./scripts/rename-release-file.sh linux
+
+
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-arm-assets
         path: ${{ github.workspace }}/dist/carveracontroller-community-*.appimage
         retention-days: 2
 
@@ -153,3 +195,20 @@ jobs:
             windows-assets-*/carveracontroller-community-*-windows-x64.exe
             macos-assets-*/carveracontroller-community-*.dmg
             linux-assets/carveracontroller-community-*.appimage
+
+  publish-release-arm:
+    needs: [ build-linux-artifacts-arm ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: linux-arm-assets/carveracontroller-community-*.appimage
+

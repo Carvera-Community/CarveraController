@@ -6,14 +6,16 @@ import logging
 import subprocess
 import sys
 import os
+import platform
 from glob import glob
 from pathlib import Path
 
 import PyInstaller.__main__
 import pyinstaller_versionfile
 from setuptools_scm import get_version
+from ruamel.yaml import YAML
 
-from . import patch_pyinstaller
+import patch_pyinstaller
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +47,7 @@ def build_pyinstaller_args(
 ) -> list[str]:
     logger.info("Build Pyinstaller args.")
     build_args = []
-    script_entrypoint = f"{PACKAGE_NAME}/main.py"
+    script_entrypoint = f"{PACKAGE_NAME}/__main__.py"
 
     logger.info(f"entrypoint: {script_entrypoint}")
     build_args += [script_entrypoint]
@@ -72,7 +74,7 @@ def build_pyinstaller_args(
         build_args += ["--icon", f"{ROOT_ASSETS_PATH.joinpath('icon-src.png')}"]
 
     logger.info(f"Add bundled package assets: {PACKAGE_PATH}")
-    build_args += ["--add-data", f"{PACKAGE_PATH}:."]
+    build_args += ["--add-data", f"{PACKAGE_PATH}:carveracontroller"]
 
     logger.info("Build options: noconsole, noconfirm, noupx, clean")
     build_args += [
@@ -81,6 +83,7 @@ def build_pyinstaller_args(
         "--noconfirm",
         "--noupx",  # Not sure if the false positive AV hits are worth it
         "--clean",
+        "--log-level=INFO",
     ]
 
     if versionfile_path is not None:
@@ -116,7 +119,8 @@ def generate_versionfile(package_version: str, output_filename: str) -> Path:
     return versionfile_path
 
 def run_appimage_builder()-> None:
-    command = "appimage-builder --recipe packaging_assets/AppImageBuilder.yml"
+    revise_appimage_definition()
+    command = f"appimage-builder --recipe {ROOT_ASSETS_PATH}/AppImageBuilder.yml"
     result = subprocess.run(command, shell=True, capture_output=False, text=True)
     if result.returncode != 0:
         logger.error(f"Error executing command: {command}")
@@ -130,6 +134,22 @@ def remove_shared_libraries(freeze_dir, *filename_patterns):
             logger.info(f"Removing {file_path}")
             os.remove(file_path)
 
+
+def revise_appimage_definition():
+    yaml = YAML()
+    with open(f"{ROOT_ASSETS_PATH}/AppImageBuilder-template.yml") as file:
+        appimage_def = yaml.load(file)
+
+    # revise definition to current system arch
+    appimage_def["AppImage"]["arch"] = platform.machine()
+
+    # version
+    appimage_def["AppDir"]["app_info"]["version"] = get_version_info()
+
+    with open(f"{ROOT_ASSETS_PATH}/AppImageBuilder.yml", 'wb') as file:
+        yaml.dump(appimage_def, file)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -142,11 +162,14 @@ def main():
         help="Choices are: windows, macos, or linux. Default is linux."
     )
 
+    parser.add_argument('--no-appimage', dest='appimage', action='store_false')
+
     # temp workaround for https://github.com/kivy/kivy/issues/8653
     patch_pyinstaller.main()
 
     args = parser.parse_args()
     os = args.os
+    appimage = args.appimage
     package_version = get_version_info()
     output_filename = PACKAGE_NAME
     versionfile_path = None
@@ -169,7 +192,9 @@ def main():
         # https://github.com/pyinstaller/pyinstaller/issues/6993 
         frozen_dir = f"dist/{PACKAGE_NAME}/_internal"
         remove_shared_libraries(frozen_dir, 'libstdc++.so.*', 'libtinfo.so.*', 'libreadline.so.*', 'libdrm.so.*')
-        run_appimage_builder()
+
+        if appimage:
+            run_appimage_builder()
 
 if __name__ == "__main__":
     main()
